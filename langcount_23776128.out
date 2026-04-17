@@ -1,0 +1,58 @@
+Job started on Fri 10 Apr 2026 11:14:59 AEST
+Job ID: 23776128
+Running on nodes: spartan-bm022
+Number of nodes: 1
+Number of tasks: 1
+CPUs per task: 1
+Tasks per node: N/A
+Configuration summary: 1 node(s), 1 task(s), 1 CPU(s) per task
+============================================================
+Language Count Results
+MPI ranks used: 1
+Total execution time: 1877.2751 seconds
+============================================================
+
+===== Mastodon =====
+Input file: mastodon-large.ndjson
+Top 10 languages:
+en: 22491651
+de: 1635537
+es: 385703
+fr: 383728
+zh: 289853
+nl: 221422
+ru: 189915
+ja: 178651
+it: 157979
+fi: 131991
+
+Stats:
+Processed lines (across all ranks): 27228181
+Non-empty lines: 27228181
+Valid JSON lines: 27228181
+Bad JSON lines: 0
+Posts with no language: 644801
+Counted language entries: 26583380
+
+===== BlueSky =====
+Input file: bluesky-large.ndjson
+Top 10 languages:
+en: 72772745
+de: 2103551
+es: 635915
+fr: 482957
+pt: 269539
+pl: 228583
+ja: 227321
+fi: 143567
+en-AU: 120529
+nl: 109243
+
+Stats:
+Processed lines (across all ranks): 77833047
+Non-empty lines: 77833047
+Valid JSON lines: 77833047
+Bad JSON lines: 0
+Posts with no language: 641722
+Counted language entries: 77830013
+Job finished on Fri 10 Apr 2026 11:46:18 AEST
