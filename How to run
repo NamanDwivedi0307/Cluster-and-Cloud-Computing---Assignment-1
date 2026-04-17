@@ -1,0 +1,83 @@
+How to run the program
+
+The application is implemented as a single MPI-based Python program, language_counter_mpi.py, and is executed on the SPARTAN cluster using a SLURM submission script, run_language_counter.slurm. The same program processes both Mastodon and BlueSky datasets, satisfying the requirement to use a single application for both platforms.
+
+The job is submitted using the sbatch command with different resource configurations. Example commands are shown below:
+
+sbatch -N 1 -n 1 --cpus-per-task=1 run_language_counter.slurm mastodon-large.ndjson bluesky-large.ndjson
+sbatch -N 1 -n 8 --ntasks-per-node=8 --cpus-per-task=1 run_language_counter.slurm mastodon-large.ndjson bluesky-large.ndjson
+sbatch -N 2 -n 8 --ntasks-per-node=4 --cpus-per-task=1 run_language_counter.slurm mastodon-large.ndjson bluesky-large.ndjson
+
+In these commands:
+
+-N specifies the number of nodes 
+
+-n specifies the total number of MPI processes 
+
+--ntasks-per-node defines how many processes run on each node 
+
+--cpus-per-task=1 assigns one CPU core per MPI process 
+
+The SLURM script first prepares the environment by purging existing modules and loading the required Python and MPI libraries. It then uses:
+
+srun -n ${SLURM_NTASKS} python language_counter_mpi.py "$1" "$2"
+
+to launch multiple MPI processes, where each process executes the same Python program. The two input arguments correspond to the Mastodon and BlueSky NDJSON files.
+
+The program outputs the top 10 languages for both platforms along with the total execution time of the job, as required. 
+
+
+
+ Parallelisation approach
+
+The application is parallelised using MPI through the mpi4py library. All MPI processes execute the same program and obtain their process identifier (rank) and the total number of processes (size) from the MPI communicator.
+
+To distribute the workload, the program uses a round-robin, line-based partitioning strategy. Since the input files are in NDJSON format, where each line represents an independent post, this allows the dataset to be naturally divided across processes. Specifically, each process only handles lines that satisfy the condition:
+
+line_num % size == rank
+
+This ensures that the input data is evenly distributed across all MPI processes.
+
+Each process independently performs the following steps on its assigned subset of data:
+
+ read input lines from the file, 
+
+ parse each line as JSON, 
+
+ skip malformed JSON records, 
+
+ extract the language field (from doc["language"] for Mastodon and record["langs"] for BlueSky), 
+
+ handle missing or null values, 
+
+ normalise language values into a consistent list format, 
+
+ and count each language occurrence locally. 
+
+If a post contains multiple languages, each language is counted separately, consistent with the assignment specification. 
+
+Each process maintains its own local frequency counts and processing statistics. After all local computations are complete, the results are collected at the root process (rank 0) using MPI.gather. The root process then merges all local counters into global results and computes the final frequency tables for both platforms.
+
+Finally, rank 0 outputs the top 10 most frequent languages and reports the total execution time. This design enables parallel processing of large datasets while maintaining a clear separation between local computation and global aggregation.
+
+
+
+ Performance analysis (with Amdahl’s Law)
+
+Figure 1
+
+Figure 1 shows the execution time of the application under three different configurations: 1 node with 1 core, 1 node with 8 cores, and 2 nodes with 8 cores. 
+
+The runtime decreases significantly from approximately 1850 seconds in the single-core configuration to around 600 seconds when using 8 cores on a single node. When the configuration is extended to 2 nodes with 8 cores (4 cores per node), the execution time is further reduced to approximately 500 seconds.
+
+
+
+The substantial reduction in runtime from 1 core to 8 cores demonstrates that the application benefits from parallel execution. The runtime decreases from approximately 1850 seconds to around 600 seconds when scaling from 1 core to 8 cores, confirming the effectiveness of parallel execution. The main workload, including reading records, parsing JSON data, extracting language attributes, and updating counters, can be distributed across multiple MPI processes. As a result, each process handles a smaller portion of the data, leading to improved overall performance.
+
+However, the speedup is not linear. Although the number of cores increases by a factor of eight, the runtime does not decrease by the same factor. This is due to the presence of serial components in the program, such as MPI initialisation, synchronisation, and final result aggregation. Additionally, all processes scan the input file, which introduces I/O overhead and limits scalability.
+
+When moving from 1 node with 8 cores to 2 nodes with 8 cores, the performance improvement is relatively small. This is because the total number of processes remains the same, meaning that the level of parallelism does not increase. Furthermore, distributing processes across multiple nodes introduces additional communication overhead, as data must be transferred across the network rather than within a single node. This overhead reduces the potential performance gain.
+
+These observations are consistent with Amdahl’s Law, which states that the maximum speedup of a parallel program is limited by the fraction of the computation that must be executed serially. Even if a large portion of the program can be parallelised, the remaining serial components and communication costs prevent ideal linear scaling. This explains why the transition from 1 to 8 cores yields significant improvement, while the benefit of using multiple nodes is more limited.
+
+This behaviour also reflects the design choice of using a simple round-robin data distribution strategy, which prioritises simplicity and robustness over optimal I/O performance.
